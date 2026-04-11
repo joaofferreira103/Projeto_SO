@@ -1,0 +1,19 @@
+---------- ESTADO DO PROJETO ----------
+
+
+---> Protocol.h:
+    - struct do tipo de request 
+    - struct da mensagem 
+    
+---> Controller.c: 
+    - cria um canal de comunicação (mkfifo) com a constante main_fifo.
+
+    - apos criar entra num estado de espera ao avrir o modo leitura, até que um runner (processo cliente) abra uma ligação de escrita no outro extremo do pipe. 
+    
+    - Estabelecnedo a ligação o programa lê a mensagem.
+    
+    - o controller valido o campo type para ver a ação a seguir. 
+
+    - caso seja stop, o controller interrompe o ciclo e fecha o descritor de ficheiro e remove o nodo do FIFO. 
+
+    
