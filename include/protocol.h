@@ -7,9 +7,10 @@
 #define MAX_CMD_LEN 512
 
 typedef enum {
-    REQ_EXECUTE, // opção -e
-    REQ_STATUS, // opção -c
-    REQ_STOP // opção -s
+    REQ_EXECUTE, // opção -e (Runner quer inciar um comando)
+    REQ_STATUS, // opção -c (Consulta)
+    REQ_STOP, // opção -s (Shutdown)
+    REQ_FINISHED // Runner avisa que terminou o comando 
 } RequestType;
 
 typedef struct{

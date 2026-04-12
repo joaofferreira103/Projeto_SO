@@ -7,7 +7,90 @@
 
 #include "protocol.h"
 
+typedef struct node{
+    Message msg; // Dados do pedido
+    struct node *next; // Ponteiro para o proximo pedido na fila
+} CommandNode; 
+
+// Variáveis globais para a fila de pedidos
+CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido 
+CommandNode *ultimo_fila = NULL; // Aponta para o ultimo pedido
+
+
+void InserirPedido(Message pedido){
+    CommandNode *novo_node = malloc(sizeof(CommandNode));
+    novo_node->msg = pedido;
+    novo_node->next = NULL;
+
+    if(ultimo_fila == NULL){
+        primeiro_fila = novo_node;
+        ultimo_fila = novo_node;
+    }
+    else{
+        ultimo_fila->next = novo_node;
+        ultimo_fila = novo_node;
+    }
+}
+
+Message RetirarPedido(){
+    if(primeiro_fila == NULL){
+        Message empty_msg;
+        return empty_msg;
+    }
+
+    CommandNode *temp = primeiro_fila;
+    Message pedido_atual = temp->msg;
+
+    primeiro_fila = primeiro_fila->next;
+    if(primeiro_fila == NULL){
+        ultimo_fila = NULL;
+    }
+
+    free(temp);
+    return pedido_atual;
+}
+
+
+void GerirPedidos(int *tasks_running, int max_simultaneo){ 
+    // Quando há vagas e pedidos na fila
+    while(*tasks_running < max_simultaneo && primeiro_fila != NULL){
+
+        // Retira o próximo pedido da fila
+        Message prox_pedido = RetirarPedido();
+
+        // Abre o pipe privado do runner para enviar a autorização
+        char runner_fifo[64];
+        snprintf(runner_fifo, sizeof(runner_fifo), "tmp/fifo_%d", prox_pedido.runner_pid);
+
+        int fd_res = open (runner_fifo, O_WRONLY);
+
+        // Verificar se a abertura do pipe privado foi bem-sucedida
+        if (fd_res != -1){
+            int autorizado = 1; // Simula autorização para o pedido
+            write(fd_res, &autorizado, sizeof(int)); // Envia a autorização para o runner
+            close(fd_res); // Fecha o pipe privado após enviar a resposta
+
+            (*tasks_running)++; // Incrementa o número de tarefas em execução
+        }
+        // Aqui podemos guardar o tempo de início para o log 
+        // Ver se fazemos isso depois 
+    }
+}
+
+
+
 int main (int argc, char *argv[]){
+
+    // Verificar os argumentos 
+    if (argc < 3){
+        // Erro 
+        return 1;
+    }
+
+    // Maximo de tarefas simultaneas
+    int max_simultaneo = atoi(argv[1]);
+    int tasks_running = 0; 
+
     // 1. Criar o FIFO (pipe com nome)
     // O 0666 DEFINE permissoes de leitura e escrita para todos os usuários
 
@@ -46,3 +129,6 @@ int main (int argc, char *argv[]){
     return 0; 
 }
 
+
+// VER O QUE É NECESSÁRIO MUDAAR NO LOOP AGORA 
+// VOU FAZER ISSO LOGO A NOITE 
