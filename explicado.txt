@@ -1,6 +1,41 @@
 ---------- ESTADO DO PROJETO ----------
 
 
+---> FASES:
+
+-Fase 1: 
+    Esqueleto e comunicação basica: 
+        Definir as structs que é enviada pelo pipe
+        Criação de pipes com nome (FIFOs) 
+        Interfaace Base: main de ambos os programas
+        Ciclo do controller: Loop q fica a espera de pedidos num pipe publico
+
+-Fase 2:
+    Execução de comandos:
+        Fork e Exec: No runer implementar logica de criar processos filhos(fork)
+      e substituir a sua imagem pelo comando pretendido (exec) apos o controller autorizar
+        Sincronizaçao: Implementar o mecanimo onde o runner bloqueia ate receber "ok" 
+      do controller atraves de um pipe privado desse runner.
+        Gestao de terminar: O runner deve deteyat que o comando terminou (usando wait) 
+      e avisar o controller.
+
+-Fase 3:
+    Esacalonamento e concorrencia 
+        Fila de espera: Implementar estrutura de dados para gaurdar comandos 
+      quando o limite de paralelismo é atingido.
+        Politica de escalonamento: LOgica para decidir quem é o proximo a executar.
+        Paralelismo: Permitir que o controller gira ate N comandos em simultaneo 
+        Logs e persisntencia: Implementar a escrita no ficheiro log com tempo de exec.
+
+-Fase 4:
+    Redirecionamento, Pipes e Testes
+        Operadores Shell: Implmentar a manipulação de descritores de ficheitos
+        Modo de consulta: FInalizar a opção -c para listar o estado do sistema
+        Scrips de teste: Criar scripts bash para automatizar o envio de multiplos comandos
+      e validar a "justiça" do escalonador          
+
+---------------------------------------------
+
 ---> Protocol.h:
     - struct do tipo de request 
     - struct da mensagem 
