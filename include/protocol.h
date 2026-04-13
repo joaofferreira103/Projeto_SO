@@ -6,6 +6,9 @@
 #define MAIN_FIFO "tmp/main_fifo"
 #define MAX_CMD_LEN 512
 
+#define STATUS_OK 1 
+#define STATUS_SHUTDOWN 2
+
 typedef enum {
     REQ_EXECUTE, // opção -e (Runner quer inciar um comando)
     REQ_STATUS, // opção -c (Consulta)
