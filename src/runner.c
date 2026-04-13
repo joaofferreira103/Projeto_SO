@@ -59,3 +59,7 @@ int main(int argc, char *argv[]){
     unlink(my_fifo); // Remove o FIFO privado do sistema
     return 0;
 }
+
+// FALTA METER O RUNNER A RECEBER A RESPOSTA DO CONTROLLER
+// E INTERPRETAR O QUE PODE FAZER 
+

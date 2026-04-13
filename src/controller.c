@@ -108,27 +108,72 @@ int main (int argc, char *argv[]){
     }   
 
     Message msg;
-    int bytesRead;
+    int shutdown_flag = 0; // Flag para indicar se o controller deve encerrar
+    int keep_running = 1; // Flag para controlar o loop principal do controller
 
     // 3. Loop para atender aos pedidos de runners 
-    while((bytesRead = read(fd_main, &msg, sizeof(Message))) > 0){
+    while(keep_running && (read(fd_main, &msg, sizeof(Message))) > 0){
         if(msg.type == REQ_EXECUTE){
-            // Por enquanto confirma que recebeu
+            if(shutdown_flag){
+                char runner_fifo[64];
+                snprintf(runner_fifo, sizeof(runner_fifo), "tmp/fifo_%d", msg.runner_pid);
+                
+                // Abre o fifo e avisa que o sistema vai encerrar
+                int fd_res = open(runner_fifo, O_WRONLY);
+                if(fd_res != -1){
+                    int status = STATUS_SHUTDOWN; 
+                    write(fd_res, &status, sizeof(int)); 
+                    close(fd_res);    
+                }
+                printf("Pedido do utilizador %d recusado. O sistema irá encerrar em breve.\n", msg.user_id);
+            }    
+            else{
+            // Chegou pedido -> mete na fila
+            InserirPedido(msg);
+            // podemos fazer este printf para verificar que o pedido chegou ao controller ??????
             printf("O comando: %s do utilizador %d foi recebido.\n", msg.command, msg.user_id);
+            GerirPedidos(&tasks_running, max_simultaneo); 
+            }
         }
-        else if(msg.type == REQ_STOP){
-            printf("A desligar o controller...\n");
-            break; // Sai do loop para encerrar o controller
-        }
-    }
 
+        else if(msg.type == REQ_FINISHED){
+            // O runner avisa que terminou o comando
+            tasks_running--; 
+            GerirPedidos(&tasks_running, max_simultaneo); // Vaga para novas tarefas
+
+            if(shutdown_flag && tasks_running == 0){
+                keep_running = 0; // Sinaliza para sair do loop principal
+            }
+        }
+
+        else if(msg.type == REQ_STATUS){
+            char private_fifo[64];
+            snprintf(private_fifo, sizeof(private_fifo), "tmp/fifo_%d", msg.runner_pid);
+            int fd_res = open(private_fifo, O_WRONLY);
+
+            if(fd_res != -1){
+                // METER LOGICA DE CORRER A LISTA DE COMANDOS 
+                // ENVIAR A INFO DOS A DECORRER E DOS NA FILA
+
+                close(fd_res);
+                
+            }
+        }
+
+        else if (msg.type == REQ_STOP){
+            // Marcar a flag de encerrado para nao aceitar mais pedidos
+            shutdown_flag = 1;
+
+            // Não havendo ninguem a correr, fecha
+            if(tasks_running == 0){
+                keep_running = 0; // Sinaliza para sair do loop principal
+                // VER COMO FAZER O CICLO PARAR APOS OS REQUESTS TERMINAREM E O SHUTDOWN_FLAG ESTAR ATIVO
+            }
+        }
     // 4. Fechar o FIFO e remover o arquivo do sistema
     close(fd_main);
     unlink(MAIN_FIFO); // Remove o ficheiro do pipe do sistema 
 
+    }
     return 0; 
 }
-
-
-// VER O QUE É NECESSÁRIO MUDAAR NO LOOP AGORA 
-// VOU FAZER ISSO LOGO A NOITE 
