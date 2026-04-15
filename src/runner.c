@@ -43,23 +43,31 @@ int main(int argc, char *argv[]){
     sprintf(submit_msg, "[runner] command %d submetido\n", getpid());
     write(STDOUT_FILENO, submit_msg, strlen(submit_msg));
     
-    // 6. Aguardar a resposta do controller no FIFO privado (Autorização)
-    int fd_priv = open(my_fifo, O_RDONLY); // Abre o FIFO privado para leitura
-    int autorization;
-    read(fd_priv, &autorization, sizeof(int)); // Lê a resposta do controller
+    // 6. Abre o pipe para ler a resposta do controller 
+    int fd_priv = open(my_fifo, O_RDONLY); 
+    int status_resposta;
+    read(fd_priv, &status_resposta, sizeof(int)); // Lê a resposta do controller
 
-    // 7. Ao ser autorizado, imprimir o que está a ser executado
-    char exec_msg[128];
-    sprintf(exec_msg, "[runner] A executar o comando %d...\n", getpid());
-    write(STDOUT_FILENO, exec_msg, strlen(exec_msg));
+    // 7. Verifica a decisão do controller 
+    if (status_resposta == STATUS_SHUTDOWN){
+        char msg_erro[] = "[runner] ERRO: O sistema está a encerrar. Pedido rejeitado.\n";
+        write(STDOUT_FILENO, msg_erro, sizeof(msg_erro)-1);
+        
+        close(fd_priv); 
+        unlink(my_fifo);
+        exit(0); // Encerra o runner
+    }
 
-    // Proximo passo: fork e exec 
+    else if (status_resposta == STATUS_OK){
+        char msg_ok[] = "[runner] Pedido autorizado. A executar comando...\n";
+        write(STDOUT_FILENO, msg_ok, sizeof(msg_ok)-1);
+
+        // Aqui é onde o runner vai fazer o fork() e execvp() depois
+    }
 
     close(fd_priv); // Fecha o FIFO privado
     unlink(my_fifo); // Remove o FIFO privado do sistema
     return 0;
 }
 
-// FALTA METER O RUNNER A RECEBER A RESPOSTA DO CONTROLLER
-// E INTERPRETAR O QUE PODE FAZER 
 
