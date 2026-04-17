@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include "protocol.h"
 
@@ -62,7 +63,49 @@ int main(int argc, char *argv[]){
         char msg_ok[] = "[runner] Pedido autorizado. A executar comando...\n";
         write(STDOUT_FILENO, msg_ok, sizeof(msg_ok)-1);
 
-        // Aqui é onde o runner vai fazer o fork() e execvp() depois
+        // Fork e exec para executar o comando
+
+        //Criar o processo filho
+        pid_t pid = fork();
+
+        if(pid < 0){
+            perror("Erro ao fazer fork");
+            exit(1);
+        }
+
+        if(pid == 0){
+            // Processo filho
+
+            // O execvp precisa de um array de strings que terminal em NULL
+            // Para já so estou a assumir sem espaços, depois vou mudar !!!
+
+            char *args[] = {msg.command, NULL}; 
+
+            // Substituir o codigo pelo comando neste processo
+            execvp(args[0], args);
+            if(execvp(args[0], args) == -1){
+                perror("Erro ao executar o comando");
+                exit(1);
+            }
+        }
+
+        else {
+            // Processo pai 
+
+            // Esperar o outro processo terminar 
+            int status; 
+            waitpid(pid, &status, 0);
+
+            // Notificar o controller q o comando terminou 
+            msg.type = REQ_FINISHED;
+
+            int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
+            write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
+            close(fd_pub); // Fecha o FIFO do controller
+        }
+
+        char finish_msg[128] = "[runner] Comando concluído e notificado ao controller.\n";
+        write(STDOUT_FILENO, finish_msg, sizeof(finish_msg)-1);
     }
 
     close(fd_priv); // Fecha o FIFO privado
@@ -70,4 +113,6 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
+
+// VOU AINDA REVER ESTE CODIGO DO FORK E EXEC 
 
