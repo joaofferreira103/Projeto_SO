@@ -102,10 +102,8 @@ int main (int argc, char *argv[]){
     // O controller bloqueia aqui até o primeiro runner abrir para escrita
 
     int fd_main = open(MAIN_FIFO, O_RDONLY);
-    if(fd_main == -1){
-        perror("Erro ao abrir o FIFO para leitura");
-        return 1;
-    }   
+    // Abrir o FIFO para escrita também para evitar que o controller receba EOF quando não houver runners conectados
+    int fd_dummy = open(MAIN_FIFO, O_WRONLY);
 
     Message msg;
     int shutdown_flag = 0; // Flag para indicar se o controller deve encerrar
@@ -169,11 +167,11 @@ int main (int argc, char *argv[]){
                 keep_running = 0; // Sinaliza para sair do loop principal
                 // VER COMO FAZER O CICLO PARAR APOS OS REQUESTS TERMINAREM E O SHUTDOWN_FLAG ESTAR ATIVO
             }
-        }
+        } 
+    }
+
     // 4. Fechar o FIFO e remover o arquivo do sistema
     close(fd_main);
-    unlink(MAIN_FIFO); // Remove o ficheiro do pipe do sistema 
-
-    }
+    unlink(MAIN_FIFO); // Remove o ficheiro do pipe do sistema
     return 0; 
 }
