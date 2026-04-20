@@ -8,6 +8,19 @@
 
 #include "protocol.h"
 
+
+int parse_command(char *command, char **args){
+    int i = 0;
+    char *token = strtok(command, " ");
+
+    while (token != NULL && i < 63){ //63 porque o ultimo é o NULL
+        args[i++] = token;
+        token = strtok(NULL, " ");
+    }
+    args[i] = NULL; // o utlimo tem de ser NULL para o execvp
+    return i;
+}
+
 int main(int argc, char *argv[]){
     // 1. Validar os args 
     // para já apenas feito para o -e
@@ -76,14 +89,13 @@ int main(int argc, char *argv[]){
         if(pid == 0){
             // Processo filho
 
-            // O execvp precisa de um array de strings que terminal em NULL
-            // Para já so estou a assumir sem espaços, depois vou mudar !!!
-
-            char *args[] = {msg.command, NULL}; 
+            // Array para os ponteiros e chamar o parser 
+            char *exec_args[64]; 
+            parse_command(msg.command, exec_args); 
 
             // Substituir o codigo pelo comando neste processo
-            execvp(args[0], args);
-            if(execvp(args[0], args) == -1){
+            
+            if(execvp(exec_args[0], exec_args) == -1){
                 perror("Erro ao executar o comando");
                 exit(1);
             }
