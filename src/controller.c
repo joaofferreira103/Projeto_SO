@@ -20,7 +20,7 @@ typedef struct node{
 // Variáveis globais para a fila de pedidos
 CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido 
 CommandNode *ultimo_fila = NULL; // Aponta para o ultimo pedido
-CommandNode *em_execucao = NULL; // Aponta para o pedido em execução (se houver)
+CommandNode *tarefas_ativas = NULL; // Aponta para a cabeça da lista de pedidos em execução 
 
 void InserirPedido(Message pedido){
     CommandNode *novo_node = malloc(sizeof(CommandNode));
@@ -66,6 +66,31 @@ Message RetirarPedido(){
 
     free(temp);
     return pedido_atual;
+}
+
+void InserirAtivos (CommandNode *no){
+    no->next = tarefas_ativas;
+    tarefas_ativas = no;
+}
+
+CommandNode* RetirarAtivos(int pid){
+    CommandNode *curr = tarefas_ativas;
+    CommandNode *prev = NULL; 
+
+    while(curr != NULL && curr->msg.runner_pid != pid){
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if(curr == NULL) return NULL; // Não encontrado
+
+    if(prev == NULL){
+        tarefas_ativas = curr->next; // Remove o nó da cabeça da lista
+    } else {
+        prev->next = curr->next; // Remove o nó do meio ou do fim da lista
+    }
+    
+    return curr; // Retorna o nó encontrado antes de o apagar 
 }
 
 
