@@ -1,14 +1,19 @@
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
 
 #include "protocol.h"
 
 typedef struct node{
     Message msg; // Dados do pedido
+    struct timespec p_chegada; // Momento da chegada
+    struct timespec p_inicio; // Momento do início da execução
     struct node *next; // Ponteiro para o proximo pedido na fila
 } CommandNode; 
 
@@ -21,6 +26,19 @@ void InserirPedido(Message pedido){
     CommandNode *novo_node = malloc(sizeof(CommandNode));
     novo_node->msg = pedido;
     novo_node->next = NULL;
+
+    // Guardar o tempo de chegada
+    clock_gettime(CLOCK_MONOTONIC, &novo_node->p_chegada);
+
+     // Inserir o novo pedido no final da fila
+     if(primeiro_fila == NULL){
+        primeiro_fila = novo_node;
+        ultimo_fila = novo_node;
+    }
+    else{
+        ultimo_fila->next = novo_node;
+        ultimo_fila = novo_node;
+    }
 
     if(ultimo_fila == NULL){
         primeiro_fila = novo_node;
