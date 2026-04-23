@@ -20,7 +20,7 @@ typedef struct node{
 // Variáveis globais para a fila de pedidos
 CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido 
 CommandNode *ultimo_fila = NULL; // Aponta para o ultimo pedido
-
+CommandNode *em_execucao = NULL; // Aponta para o pedido em execução (se houver)
 
 void InserirPedido(Message pedido){
     CommandNode *novo_node = malloc(sizeof(CommandNode));
