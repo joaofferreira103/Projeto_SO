@@ -50,22 +50,20 @@ void InserirPedido(Message pedido){
     }
 }
 
-Message RetirarPedido(){
+CommandNode* RetirarPedido(){
     if(primeiro_fila == NULL){
-        Message empty_msg;
-        return empty_msg;
+        return NULL;
     }
 
-    CommandNode *temp = primeiro_fila;
-    Message pedido_atual = temp->msg;
+    CommandNode *executar = primeiro_fila;
+    // Message pedido_atual = temp->msg; ja nao deverá ser + necessario 
 
     primeiro_fila = primeiro_fila->next;
     if(primeiro_fila == NULL){
         ultimo_fila = NULL;
     }
 
-    free(temp);
-    return pedido_atual;
+    return executar; 
 }
 
 void InserirAtivos (CommandNode *no){
@@ -99,7 +97,9 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
     while(*tasks_running < max_simultaneo && primeiro_fila != NULL){
 
         // Retira o próximo pedido da fila
-        Message prox_pedido = RetirarPedido();
+        CommandNode *executar = RetirarPedido();
+        
+        clock_gettime(CLOCK_MONOTONIC, &executar->p_inicio); 
 
         // Abre o pipe privado do runner para enviar a autorização
         char runner_fifo[64];
@@ -114,6 +114,11 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
             close(fd_res); // Fecha o pipe privado após enviar a resposta
 
             (*tasks_running)++; // Incrementa o número de tarefas em execução
+        
+            // Adicionar o pedido à lista de tarefas ativas
+            InserirAtivos(executar);
+            // print aaqui de comando autorizado e a executar??? nao devo meter 
+
         }
         // Aqui podemos guardar o tempo de início para o log 
         // Ver se fazemos isso depois 
