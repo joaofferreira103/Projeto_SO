@@ -22,6 +22,15 @@ CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido
 CommandNode *ultimo_fila = NULL; // Aponta para o ultimo pedido
 CommandNode *tarefas_ativas = NULL; // Aponta para a cabeça da lista de pedidos em execução 
 
+long calcularTempo(struct timespec inicio, struct timespec fim){
+   long ms = (fim.tv_sec - inicio.tv_sec) * 1000; // Converte segundos para milissegundos
+
+   // Ajusta com a diferença de nanosegundos 
+   ms += (fim.tv_nsec - inicio.tv_nsec) / 1000000; // Converte nanosegundos para milissegundos
+
+   return ms;
+}
+
 void InserirPedido(Message pedido){
     CommandNode *novo_node = malloc(sizeof(CommandNode));
     novo_node->msg = pedido;
@@ -93,6 +102,7 @@ CommandNode* RetirarAtivos(int pid){
 
 
 void GerirPedidos(int *tasks_running, int max_simultaneo){ 
+    // TALVEZ METER AQUI O IF(SHUTDOWN) RETURN???
     // Quando há vagas e pedidos na fila
     while(*tasks_running < max_simultaneo && primeiro_fila != NULL){
 
@@ -103,7 +113,7 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
 
         // Abre o pipe privado do runner para enviar a autorização
         char runner_fifo[64];
-        snprintf(runner_fifo, sizeof(runner_fifo), "tmp/fifo_%d", prox_pedido.runner_pid);
+        snprintf(runner_fifo, sizeof(runner_fifo), "tmp/fifo_%d", executar->msg.runner_pid);
 
         int fd_res = open (runner_fifo, O_WRONLY);
 
@@ -124,7 +134,6 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
         // Ver se fazemos isso depois 
     }
 }
-
 
 
 int main (int argc, char *argv[]){
@@ -183,12 +192,31 @@ int main (int argc, char *argv[]){
         }
 
         else if(msg.type == REQ_FINISHED){
-            // O runner avisa que terminou o comando
+
+            // Parte de estatísticas e logs do comando terminado
+            struct timespec p_fim;
+            clock_gettime(CLOCK_MONOTONIC, &p_fim);
+
+            CommandNode *terminado = RetirarAtivos(msg.runner_pid);
+            if(terminado != NULL){
+                long tempo_espera = calcularTempo(terminado->p_chegada, terminado->p_inicio);
+                long tempo_execucao = calcularTempo(terminado->p_inicio, p_fim);
+                
+                // METER LOG DO COMANDO AQUI DPS
+
+                printf("[INFO] O comando %s do utilizador %d terminou. Tempo de espera: %ldms, Tempo de execução: %ldms\n", 
+                    terminado->msg.command, terminado->msg.user_id, tempo_espera, tempo_execucao);
+
+                free(terminado);    
+            }
+
+            // Atualizar estado e logica shutdown 
             tasks_running--; 
-            GerirPedidos(&tasks_running, max_simultaneo); // Vaga para novas tarefas
 
             if(shutdown_flag && tasks_running == 0){
                 keep_running = 0; // Sinaliza para sair do loop principal
+            } else {
+                GerirPedidos(&tasks_running, max_simultaneo); // Verificar se há mais pedidos para autorizar
             }
         }
 
