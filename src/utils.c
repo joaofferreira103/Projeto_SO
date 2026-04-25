@@ -19,7 +19,7 @@ void registarLogs(Message msg, long espera, long resposta){
     char buffer[512];
 
     int len = snprintf(buffer, sizeof(buffer),
-              "User ID: %d | Command_ID: %d | Command: %s | Tempo de espera: %ldms | Tempo de execução: %lsms | Tempo Total: %ldms\n",
+              "User ID: %d | Command_ID: %d | Command: %s | Tempo de espera: %ldms | Tempo de execução: %ldms | Tempo Total: %ldms\n",
                msg.user_id, msg.runner_pid, msg.command, espera, resposta, (espera + resposta));
 
     // Escreve o log no ficheiro

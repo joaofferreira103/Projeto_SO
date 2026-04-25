@@ -8,6 +8,8 @@
 
 #include "protocol.h"
 
+// comando para correr runner - ./runner -e <user_id> <command>
+
 
 int parse_command(char *command, char **args){
     int i = 0;

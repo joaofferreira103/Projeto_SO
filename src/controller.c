@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-
+#include "utils.h"
 #include "protocol.h"
 
 typedef struct node{
@@ -22,14 +22,6 @@ CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido
 CommandNode *ultimo_fila = NULL; // Aponta para o ultimo pedido
 CommandNode *tarefas_ativas = NULL; // Aponta para a cabeça da lista de pedidos em execução 
 
-long calcularTempo(struct timespec inicio, struct timespec fim){
-   long ms = (fim.tv_sec - inicio.tv_sec) * 1000; // Converte segundos para milissegundos
-
-   // Ajusta com a diferença de nanosegundos 
-   ms += (fim.tv_nsec - inicio.tv_nsec) / 1000000; // Converte nanosegundos para milissegundos
-
-   return ms;
-}
 
 void InserirPedido(Message pedido){
     CommandNode *novo_node = malloc(sizeof(CommandNode));
@@ -201,12 +193,12 @@ int main (int argc, char *argv[]){
             if(terminado != NULL){
                 long tempo_espera = calcularTempo(terminado->p_chegada, terminado->p_inicio);
                 long tempo_execucao = calcularTempo(terminado->p_inicio, p_fim);
-                
-                // METER LOG DO COMANDO AQUI DPS
 
                 printf("[INFO] O comando %s do utilizador %d terminou. Tempo de espera: %ldms, Tempo de execução: %ldms\n", 
                     terminado->msg.command, terminado->msg.user_id, tempo_espera, tempo_execucao);
 
+                registarLogs(terminado->msg, tempo_espera, tempo_execucao);
+                    
                 free(terminado);    
             }
 
