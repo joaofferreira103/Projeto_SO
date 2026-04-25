@@ -25,9 +25,14 @@ void registarLogs(Message msg, long espera, long resposta){
     // Escreve o log no ficheiro
     int fd = open("logs/log.txt", O_WRONLY | O_CREAT | O_APPEND, 0666);
 
-    if(fd != -1){
-        write(fd, buffer, len);
-        close(fd);
+    if(fd == -1){
+        perror("Erro ao abrir o ficheiro de logs");
+        return;
     }
+
+    if(write(fd, buffer, len) == -1){
+        perror("Erro ao escrever no ficheiro de logs");
+    }
+    close(fd);
 }
 
