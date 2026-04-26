@@ -127,6 +127,45 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
     }
 }
 
+void responderStatus(Message msg_pedido){
+    char private_fifo[64];
+    snprintf(private_fifo, sizeof(private_fifo), "tmp/fifo_%d", msg_pedido.runner_pid);
+    
+    int fd_res = open(private_fifo, O_WRONLY);
+    if (fd_res == -1){
+        perror("[CONTROLLER] Erro ao abrir o pipe do runner para status");
+        return;
+    }
+
+    Message resposta;
+    CommandNode *curr = tarefas_ativas;
+
+    // Enviar comandos em execução
+    while(curr != NULL){
+        resposta = curr->msg;
+        write(fd_res, &resposta, sizeof(Message));
+        curr = curr->next;
+    }
+
+    // Sinalizar fim da primeira lista
+    resposta.user_id = -1;
+    write(fd_res, &resposta, sizeof(Message));
+
+    // Enviar comandos na fila de espera
+    curr = primeiro_fila;
+    while(curr != NULL){
+        resposta = curr->msg;
+        write(fd_res, &resposta, sizeof(Message));
+        curr = curr->next;
+    }
+
+    // Sinalizar fim da segunda lista
+    resposta.user_id = -1;
+    write(fd_res, &resposta, sizeof(Message));
+
+    close(fd_res);
+}
+
 
 int main (int argc, char *argv[]){
 
@@ -213,18 +252,8 @@ int main (int argc, char *argv[]){
         }
 
         else if(msg.type == REQ_STATUS){
-            char private_fifo[64];
-            snprintf(private_fifo, sizeof(private_fifo), "tmp/fifo_%d", msg.runner_pid);
-            int fd_res = open(private_fifo, O_WRONLY);
-
-            if(fd_res != -1){
-                // METER LOGICA DE CORRER A LISTA DE COMANDOS 
-                // ENVIAR A INFO DOS A DECORRER E DOS NA FILA
-
-                close(fd_res);
-                
+            responderStatus(msg);   
             }
-        }
 
         else if (msg.type == REQ_STOP){
             // Marcar a flag de encerrado para nao aceitar mais pedidos

@@ -172,7 +172,7 @@ int main(int argc, char *argv[]){
     // Verificar se é o "-c" para status  
     else if(strcmp(argv[1], "-c") == 0){
         //Logica de Consulta
-        ConsultarStatus(my_fifo); 
+        consultarStatus(my_fifo); 
     }  
 
     // Verificar se é o "-s" para shutdown 
