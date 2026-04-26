@@ -3,3 +3,4 @@ User ID: 103 | Command_ID: 11667 | Command: ls -la | Tempo de espera: 0ms | Temp
 User ID: 103 | Command_ID: 11696 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
 User ID: 103 | Command_ID: 11788 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
 User ID: 103 | Command_ID: 11790 | Command: ls -la | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
+User ID: 101 | Command_ID: 55600 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 3ms | Tempo Total: 3ms
