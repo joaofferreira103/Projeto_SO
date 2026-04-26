@@ -40,15 +40,6 @@ void InserirPedido(Message pedido){
         ultimo_fila->next = novo_node;
         ultimo_fila = novo_node;
     }
-
-    if(ultimo_fila == NULL){
-        primeiro_fila = novo_node;
-        ultimo_fila = novo_node;
-    }
-    else{
-        ultimo_fila->next = novo_node;
-        ultimo_fila = novo_node;
-    }
 }
 
 CommandNode* RetirarPedido(){
@@ -148,6 +139,7 @@ void responderStatus(Message msg_pedido){
     }
 
     // Sinalizar fim da primeira lista
+    memset(&resposta, 0, sizeof(Message)); // Limpar a estrutura de resposta
     resposta.user_id = -1;
     write(fd_res, &resposta, sizeof(Message));
 
@@ -160,6 +152,7 @@ void responderStatus(Message msg_pedido){
     }
 
     // Sinalizar fim da segunda lista
+    memset(&resposta, 0, sizeof(Message)); // Limpar a estrutura de resposta
     resposta.user_id = -1;
     write(fd_res, &resposta, sizeof(Message));
 
@@ -269,6 +262,11 @@ int main (int argc, char *argv[]){
 
     // 4. Fechar o FIFO e remover o arquivo do sistema
     close(fd_main);
+    close(fd_dummy);
     unlink(MAIN_FIFO); // Remove o ficheiro do pipe do sistema
+
+    char msg_final[] = "[CONTROLLER] Servido encerrado com sucesso.\n";
+    write(STDOUT_FILENO, msg_final, strlen(msg_final));
+
     return 0; 
 }

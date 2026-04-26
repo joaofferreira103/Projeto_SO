@@ -177,10 +177,23 @@ int main(int argc, char *argv[]){
 
     // Verificar se é o "-s" para shutdown 
     else if(strcmp(argv[1], "-s") == 0){
-        //Logica de Shutdown
-        //tratar_shutdown(myfifo); 
-    }
+        // Preparar mensagem 
+        Message msg;
+        msg.type = REQ_STOP;
+        msg.runner_pid = getpid();
 
+        int fd_pub = open(MAIN_FIFO, O_WRONLY); 
+        if (fd_pub != -1){
+            write(fd_pub, &msg, sizeof(Message));
+            close(fd_pub);
+
+            // Notificar o user
+            char shutdown_msg[] = "[runner] Pedido de shutdown submetido.\n";
+            write(STDOUT_FILENO, shutdown_msg, sizeof(shutdown_msg)-1);
+        } else {
+            perror("[runner]: Erro ao abrir o FIFO do controller para shutdown");
+        }
+    }
     unlink(my_fifo); // Remove o FIFO privado do sistema
     return 0;
 }
