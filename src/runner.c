@@ -141,10 +141,9 @@ int main(int argc, char *argv[]){
 
                 // Substituir o codigo pelo comando neste processo
             
-                if(execvp(exec_args[0], exec_args) == -1){
-                    perror("Erro ao executar o comando");
+                execvp(exec_args[0], exec_args);
+                // Se execvp falhar
                 exit(1);
-                }
             }
 
             else {
@@ -154,16 +153,24 @@ int main(int argc, char *argv[]){
                 int status; 
                 waitpid(pid, &status, 0);
 
-                // Notificar o controller q o comando terminou 
-                msg.type = REQ_FINISHED;
+                // Verificar se o processo filho terminou com sucesso
+                if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+                    msg.type = REQ_FINISHED;
+                    int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
+                    write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
+                    close(fd_pub); // Fecha o FIFO do controller
 
-                int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
-                write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
-                close(fd_pub); // Fecha o FIFO do controller
-            }
+                    char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
+                    write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
+                } else {
+                    msg.type = REQ_FINISHED;
+                    int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do
+                    write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
+                    close(fd_pub); // Fecha o FIFO do controller
 
-            char finish_msg[128] = "[runner] Comando concluído e notificado ao controller.\n";
-            write(STDOUT_FILENO, finish_msg, sizeof(finish_msg)-1);
+                    char error_msg[] = "[runner] Erro: Comando falhou ou não existe.\n";
+                    write(STDOUT_FILENO, error_msg, sizeof(error_msg)-1);
+                }
         }
 
         close(fd_priv); // Fecha o FIFO privado
