@@ -11,16 +11,33 @@
 // comando para correr runner - ./runner -e <user_id> <command>
 
 
-int parse_command(char *command, char **args){
+int parse_command(char *command, char **args, Redirections *redir){
     int i = 0;
-    char *token = strtok(command, " ");
+    // Inicializar a estrutura a NULL
+    redir->input_file = redir->output_file = redir->append_file = redir->error_file = NULL;
 
+    char *token = strtok(command, " ");
     while (token != NULL && i < 63){ //63 porque o ultimo é o NULL
-        args[i++] = token;
-        token = strtok(NULL, " ");
+        if(strcmp(token, ">") == 0){
+            redir->output_file = strtok(NULL, " "); // O próximo token é o ficheiro
+        }
+        else if(strcmp(token, ">>") == 0){
+            redir->append_file = strtok(NULL, " ");
+        }
+        else if(strcmp(token, "<") == 0){
+            redir->input_file = strtok(NULL, " ");
+        }
+        else if(strcmp(token, "2>") == 0){
+            redir->error_file = strtok(NULL, " ");
+        }
+        else {
+            // Se não for um operador, é um argumento do comando
+            args[i++] = token;
+        }
+    token = strtok(NULL, " "); 
     }
-    args[i] = NULL; // o utlimo tem de ser NULL para o execvp
-    return i;
+    args[i] = NULL; // O último argumento deve ser NULL para execvp
+    return i; 
 }
 
 void consultarStatus(char *myfifo){
@@ -63,6 +80,54 @@ void consultarStatus(char *myfifo){
     }
     close(fd_priv);
 }
+
+
+void configRedirections(Redirections redir){
+    // Saida > 
+    if(redir.output_file){
+        int fd_out = open(redir.output_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd_out == -1){
+            perror("Erro ao abrir o ficheiro de saída");
+            _exit(EXIT_FAILURE);
+        }
+        dup2(fd_out, STDOUT_FILENO); // Redireciona a saída padrão para o ficheiro
+        close(fd_out); // Fecha o descritor original
+    }
+
+    // Append >>
+    if(redir.append_file){
+        int fd_append = open(redir.append_file, O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (fd_append == -1){
+            perror("Erro ao abrir o ficheiro de append");
+            _exit(EXIT_FAILURE);
+        }
+        dup2(fd_append, STDOUT_FILENO); 
+        close(fd_append); 
+    }
+
+    // Entrada <
+    if(redir.input_file){
+        int fd_in = open(redir.input_file, O_RDONLY);
+        if (fd_in == -1){
+            perror("Erro ao abrir o ficheiro de entrada");
+            _exit(EXIT_FAILURE);
+        }
+        dup2(fd_in, STDIN_FILENO);
+        close(fd_in);
+    }
+
+    // Erro 2>
+    if(redir.error_file){
+        int fd_err = open(redir.error_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd_err == -1){
+            perror("Erro ao abrir o ficheiro de erro");
+            _exit(EXIT_FAILURE);
+        }
+        dup2(fd_err, STDERR_FILENO); 
+        close(fd_err); 
+    }
+}
+
 
 int main(int argc, char *argv[]){
     // 1. Validar os args 
@@ -133,17 +198,20 @@ int main(int argc, char *argv[]){
             }
 
             if(pid == 0){
-                // Processo filho
-
-                // Array para os ponteiros e chamar o parser 
+                // Processo filho                
+ 
                 char *exec_args[64]; 
-                parse_command(msg.command, exec_args); 
+                Redirections redir;
 
-                // Substituir o codigo pelo comando neste processo
-            
+                parse_command(msg.command, exec_args, &redir); 
+
+                // Configurar redirecionamentos
+                configRedirections(redir);
+
+                // Executar (substituir o codigo pelo comando neste processo)
                 execvp(exec_args[0], exec_args);
                 // Se execvp falhar
-                exit(1);
+                _exit(EXIT_FAILURE);
             }
 
             else {
@@ -171,27 +239,28 @@ int main(int argc, char *argv[]){
                     char error_msg[] = "[runner] Erro: Comando falhou ou não existe.\n";
                     write(STDOUT_FILENO, error_msg, sizeof(error_msg)-1);
                 }
-        }
+            }
 
-        close(fd_priv); // Fecha o FIFO privado
-        }
+            close(fd_priv); // Fecha o FIFO privado
+            }
 
-    // Verificar se é o "-c" para status  
-    else if(strcmp(argv[1], "-c") == 0){
-        //Logica de Consulta
-        consultarStatus(my_fifo); 
-    }  
+        // Verificar se é o "-c" para status  
+        else if(strcmp(argv[1], "-c") == 0){
+            //Logica de Consulta
+            consultarStatus(my_fifo); 
+        }  
 
-    // Verificar se é o "-s" para shutdown 
-    else if(strcmp(argv[1], "-s") == 0){
-        // Preparar mensagem 
-        Message msg;
-        msg.type = REQ_STOP;
-        msg.runner_pid = getpid();
+        // Verificar se é o "-s" para shutdown 
+        else if(strcmp(argv[1], "-s") == 0){
+            // Preparar mensagem 
+            Message msg;
+            msg.type = REQ_STOP;
+            msg.runner_pid = getpid();
 
-        int fd_pub = open(MAIN_FIFO, O_WRONLY); 
-        if (fd_pub != -1){
-            write(fd_pub, &msg, sizeof(Message));
+            int fd_pub = open(MAIN_FIFO, O_WRONLY); 
+            if (fd_pub != -1){
+                write(fd_pub, &msg, sizeof(Message));
+            }
             close(fd_pub);
 
             // Notificar o user

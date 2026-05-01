@@ -17,6 +17,13 @@ typedef enum {
 } RequestType;
 
 typedef struct{
+    char *input_file; // Para o <
+    char *output_file; // Para o >
+    char *append_file; // Para o >>
+    char *error_file; // Para o 2>
+} Redirections;
+
+typedef struct{
     RequestType type; 
     pid_t runner_pid; // Usado para criar o nome do pipe de repsosta
     int user_id; 
