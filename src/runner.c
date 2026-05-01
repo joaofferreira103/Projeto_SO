@@ -40,6 +40,28 @@ int parse_command(char *command, char **args, Redirections *redir){
     return i; 
 }
 
+// Dividir o input quando é pipe (|)
+int dividirComando(char *comando_total, char *comando1, char *comando2){
+    // Procurar a primeira ocorrência |
+    char *pos_pipe = strchr(comando_total, '|');
+
+    if(pos_pipe == NULL){
+        strcpy(comando1, comando_total);
+        comando2[0] = '\0'; // Segundo comando vazio
+        return 0; // Indica que não há pipe
+    }
+
+    // Copiar a parte da esquerda (antes |)
+    int tam_esq = pos_pipe - comando_total; 
+    strncpy(comando1, comando_total, tam_esq);
+    comando1[tam_esq] = '\0'; // Terminar a string do comando
+
+    // Copiar a parte da direita (depois |)
+    strcpy(comando2, pos_pipe + 1); 
+
+    return 1; // Indica que há pipe
+}
+
 void consultarStatus(char *myfifo){
     Message msg;
     msg.type = REQ_STATUS;
@@ -187,91 +209,98 @@ int main(int argc, char *argv[]){
             char msg_ok[] = "[runner] Pedido autorizado. A executar comando...\n";
             write(STDOUT_FILENO, msg_ok, sizeof(msg_ok)-1);
 
-            // Fork e exec para executar o comando
+            char cmd1[MAX_CMD_LEN], cmd2[MAX_CMD_LEN];
+            int tem_pipe = dividirComando(msg.command, cmd1, cmd2);
 
-            //Criar o processo filho
-            pid_t pid = fork();
+            if(tem_pipe){
+                // LOGICA DO PIPE 
+            } 
+            else{  
 
-            if(pid < 0){
-                perror("Erro ao fazer fork");
-                exit(1);
-            }
+                //Criar o processo filho
+                pid_t pid = fork();
 
-            if(pid == 0){
-                // Processo filho                
- 
-                char *exec_args[64]; 
-                Redirections redir;
+                if(pid < 0){
+                    perror("Erro ao fazer fork");
+                    exit(1);
+                }
 
-                parse_command(msg.command, exec_args, &redir); 
+                if(pid == 0){
+                    // Processo filho                
+                    char *exec_args[64]; 
+                    Redirections redir;
 
-                // Configurar redirecionamentos
-                configRedirections(redir);
+                    parse_command(msg.command, exec_args, &redir); 
 
-                // Executar (substituir o codigo pelo comando neste processo)
-                execvp(exec_args[0], exec_args);
-                // Se execvp falhar
-                _exit(EXIT_FAILURE);
-            }
+                    // Configurar redirecionamentos
+                    configRedirections(redir);
+                    // Executar (substituir o codigo pelo comando neste processo)
+                    execvp(exec_args[0], exec_args);
+                    // Se execvp falhar
+                    _exit(EXIT_FAILURE);
+                }
 
-            else {
-                // Processo pai 
+                else {
+                    // Processo pai 
 
-                // Esperar o outro processo terminar 
-                int status; 
-                waitpid(pid, &status, 0);
+                    // Esperar o outro processo terminar 
+                    int status; 
+                    waitpid(pid, &status, 0);
 
-                // Verificar se o processo filho terminou com sucesso
-                if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
-                    msg.type = REQ_FINISHED;
-                    int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
-                    write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
-                    close(fd_pub); // Fecha o FIFO do controller
+                    // Verificar se o processo filho terminou com sucesso
+                    if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+                        msg.type = REQ_FINISHED;
+                        int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
+                        write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
+                        close(fd_pub); // Fecha o FIFO do controller
 
-                    char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
-                    write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
-                } else {
-                    msg.type = REQ_FINISHED;
-                    int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do
-                    write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
-                    close(fd_pub); // Fecha o FIFO do controller
+                        char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
+                        write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
+                    } else {
+                        msg.type = REQ_FINISHED;
+                        int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do
+                        write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
+                        close(fd_pub); // Fecha o FIFO do controller
 
-                    char error_msg[] = "[runner] Erro: Comando falhou ou não existe.\n";
-                    write(STDOUT_FILENO, error_msg, sizeof(error_msg)-1);
+                        char error_msg[] = "[runner] Erro: Comando falhou ou não existe.\n";
+                        write(STDOUT_FILENO, error_msg, sizeof(error_msg)-1);
+                    }
+                }
+
+                close(fd_priv); // Fecha o FIFO privado
                 }
             }
 
-            close(fd_priv); // Fecha o FIFO privado
-            }
+    }    
 
-        // Verificar se é o "-c" para status  
-        else if(strcmp(argv[1], "-c") == 0){
-            //Logica de Consulta
-            consultarStatus(my_fifo); 
-        }  
+    // Verificar se é o "-c" para status  
+    else if(strcmp(argv[1], "-c") == 0){
+        //Logica de Consulta
+        consultarStatus(my_fifo); 
+    }  
 
-        // Verificar se é o "-s" para shutdown 
-        else if(strcmp(argv[1], "-s") == 0){
-            // Preparar mensagem 
-            Message msg;
-            msg.type = REQ_STOP;
-            msg.runner_pid = getpid();
+    // Verificar se é o "-s" para shutdown 
+    else if(strcmp(argv[1], "-s") == 0){
+        // Preparar mensagem 
+        Message msg;
+        msg.type = REQ_STOP;
+        msg.runner_pid = getpid();
 
-            int fd_pub = open(MAIN_FIFO, O_WRONLY); 
-            if (fd_pub != -1){
-                write(fd_pub, &msg, sizeof(Message));
-            }
-            close(fd_pub);
-
-            // Notificar o user
-            char shutdown_msg[] = "[runner] Pedido de shutdown submetido.\n";
-            write(STDOUT_FILENO, shutdown_msg, sizeof(shutdown_msg)-1);
-        } else {
-            perror("[runner]: Erro ao abrir o FIFO do controller para shutdown");
+        int fd_pub = open(MAIN_FIFO, O_WRONLY); 
+        if (fd_pub != -1){
+            write(fd_pub, &msg, sizeof(Message));
         }
+        close(fd_pub);
+
+        // Notificar o user
+        char shutdown_msg[] = "[runner] Pedido de shutdown submetido.\n";
+        write(STDOUT_FILENO, shutdown_msg, sizeof(shutdown_msg)-1);
+    } else {
+        perror("[runner]: Erro ao abrir o FIFO do controller para shutdown");
     }
-    unlink(my_fifo); // Remove o FIFO privado do sistema
-    return 0;
+    
+unlink(my_fifo); // Remove o FIFO privado do sistema
+return 0;
 }
 
 
