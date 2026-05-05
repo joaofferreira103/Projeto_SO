@@ -150,6 +150,59 @@ void configRedirections(Redirections redir){
     }
 }
 
+void executarPipe(char *cmd1, char *cmd2, Message *msg){
+    int pipefd[2];
+    if (pipe(pipefd) == -1){
+        perror("Erro ao criar o pipe");
+        return;
+    }
+
+    pid_t pid1 = fork();
+    if(pid1 == 0){
+        dup2(pipefd[1], STDOUT_FILENO); // Redireciona a saída do cmd1 para o pipe
+        // Fechamos porque o dup já fez a redireção
+        close(pipefd[0]); 
+        close(pipefd[1]); 
+
+        char *args1[64];
+        Redirections redir1;
+        parse_command(cmd1, args1, &redir1); // Parse do cmd1
+        configRedirections(redir1); // Configura os redirecionamentos do cmd1
+        execvp(args1[0], args1); // Executa o cmd1
+        _exit(EXIT_FAILURE); 
+    }
+
+    pid_t pid2 = fork();
+    if(pid2 == 0){
+        dup2(pipefd[0], STDIN_FILENO); // Redireciona a entrada do cmd2 para o pipe
+        // Fechamos porque o dup já fez a redireção
+        close(pipefd[0]); 
+        close(pipefd[1]); 
+
+        char *args2[64];
+        Redirections redir2;
+        parse_command(cmd2, args2, &redir2); // Parse do cmd2
+        configRedirections(redir2); // Configura os redirecionamentos do cmd2
+        execvp(args2[0], args2); // Executa o cmd2
+        _exit(EXIT_FAILURE); 
+    }
+
+    // (Runner)
+    close(pipefd[0]);
+    close(pipefd[1]);
+    waitpid(pid1, NULL, 0); // Espera o cmd1 terminar
+    waitpid(pid2, NULL, 0); // Espera o cmd2 terminar
+
+    // Notificar o controller que o comando terminou
+    msg->type = REQ_FINISHED;
+    int fd_pub = open(MAIN_FIFO, O_WRONLY);
+    write(fd_pub, msg, sizeof(Message));
+    close(fd_pub);
+
+    char finish_msg[] = "[runner] Comando com pipe concluído com sucesso.\n";
+    write(STDOUT_FILENO, finish_msg, sizeof(finish_msg)-1);
+}
+
 
 int main(int argc, char *argv[]){
     // 1. Validar os args 
@@ -213,10 +266,11 @@ int main(int argc, char *argv[]){
             int tem_pipe = dividirComando(msg.command, cmd1, cmd2);
 
             if(tem_pipe){
-                // LOGICA DO PIPE 
+                executarPipe(cmd1, cmd2, &msg);
             } 
             else{  
-
+                // TALVEZ FAZER ISTO NUMA FUNÇÃO FORA DA MAIN
+                
                 //Criar o processo filho
                 pid_t pid = fork();
 
