@@ -203,6 +203,57 @@ void executarPipe(char *cmd1, char *cmd2, Message *msg){
     write(STDOUT_FILENO, finish_msg, sizeof(finish_msg)-1);
 }
 
+void executarComandoSimples(char *cmd, Message *msg){
+    //Criar o processo filho
+    pid_t pid = fork();
+
+    if(pid < 0){
+        perror("Erro ao fazer fork");
+        exit(1);
+    }
+
+    if(pid == 0){
+        // Processo filho                
+        char *exec_args[64]; 
+        Redirections redir;
+
+        parse_command(cmd, exec_args, &redir); 
+
+        // Configurar redirecionamentos
+        configRedirections(redir);
+        // Executar (substituir o codigo pelo comando neste processo)
+        execvp(exec_args[0], exec_args);
+        // Se execvp falhar
+        _exit(EXIT_FAILURE);
+    }
+    else {
+        // Processo pai 
+        // Esperar o outro processo terminar 
+        int status; 
+        waitpid(pid, &status, 0);
+
+        // Notificiar o controller da vaga
+        msg->type = REQ_FINISHED;
+        int fd_pub = open(MAIN_FIFO, O_WRONLY);
+        if(fd_pub != -1){
+            write(fd_pub, msg, sizeof(Message));
+            close(fd_pub);
+        } else {
+            perror("Erro ao abrir o FIFO do controller para notificar comando terminado");
+        }
+
+        // Feedback ao utilizador baseado no status do comando
+        if(WIFEXITED(status) && WEFISTATUS(status) == 0){
+            char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
+            write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
+        } else {
+            char error_msg[] = "[runner] Comando terminou com erro.\n";
+            write(STDOUT_FILENO, error_msg, sizeof(error_msg));
+        }
+    }     
+}
+
+
 
 int main(int argc, char *argv[]){
     // 1. Validar os args 
@@ -267,63 +318,10 @@ int main(int argc, char *argv[]){
 
             if(tem_pipe){
                 executarPipe(cmd1, cmd2, &msg);
-            } 
-            else{  
-                // TALVEZ FAZER ISTO NUMA FUNÇÃO FORA DA MAIN
-                
-                //Criar o processo filho
-                pid_t pid = fork();
-
-                if(pid < 0){
-                    perror("Erro ao fazer fork");
-                    exit(1);
-                }
-
-                if(pid == 0){
-                    // Processo filho                
-                    char *exec_args[64]; 
-                    Redirections redir;
-
-                    parse_command(msg.command, exec_args, &redir); 
-
-                    // Configurar redirecionamentos
-                    configRedirections(redir);
-                    // Executar (substituir o codigo pelo comando neste processo)
-                    execvp(exec_args[0], exec_args);
-                    // Se execvp falhar
-                    _exit(EXIT_FAILURE);
-                }
-
-                else {
-                    // Processo pai 
-
-                    // Esperar o outro processo terminar 
-                    int status; 
-                    waitpid(pid, &status, 0);
-
-                    // Verificar se o processo filho terminou com sucesso
-                    if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
-                        msg.type = REQ_FINISHED;
-                        int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do controller para escrita
-                        write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
-                        close(fd_pub); // Fecha o FIFO do controller
-
-                        char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
-                        write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
-                    } else {
-                        msg.type = REQ_FINISHED;
-                        int fd_pub = open(MAIN_FIFO, O_WRONLY); // abre o FIFO do
-                        write(fd_pub, &msg, sizeof(Message)); // Envia a mensagem
-                        close(fd_pub); // Fecha o FIFO do controller
-
-                        char error_msg[] = "[runner] Erro: Comando falhou ou não existe.\n";
-                        write(STDOUT_FILENO, error_msg, sizeof(error_msg)-1);
-                    }
-                }
-
-                close(fd_priv); // Fecha o FIFO privado
-                }
-            }
+            } else {
+                executarComandoSimples(cmd1, &msg);
+            }  
+        }
 
     }    
 
