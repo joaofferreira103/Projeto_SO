@@ -57,7 +57,7 @@
 
   -- Melhorar o parser para pipes ----> FEITO 
   -- Implementar politica de escalonamento 
-  -- Implementar suporte a multiplos pipes 
+  -- Implementar suporte a multiplos pipes (Ver se é suposto)
   -- Testes 
   -- Verificar se a makefile segue o exemplo do enunciado
   -- Verificar se nao usamos nada que o enunciado nao permita 
