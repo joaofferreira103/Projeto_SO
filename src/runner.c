@@ -46,7 +46,8 @@ int dividirComando(char *comando_total, char *comando1, char *comando2){
     char *pos_pipe = strchr(comando_total, '|');
 
     if(pos_pipe == NULL){
-        strcpy(comando1, comando_total);
+        strncpy(comando1, comando_total, MAX_CMD_LEN - 1);
+        comando1[MAX_CMD_LEN - 1] = '\0'; // Garantir terminação
         comando2[0] = '\0'; // Segundo comando vazio
         return 0; // Indica que não há pipe
     }
@@ -57,7 +58,13 @@ int dividirComando(char *comando_total, char *comando1, char *comando2){
     comando1[tam_esq] = '\0'; // Terminar a string do comando
 
     // Copiar a parte da direita (depois |)
-    strcpy(comando2, pos_pipe + 1); 
+    char *ptr_direita = pos_pipe + 1; // Aponta para o início do segundo comando
+    while(*ptr_direita == ' '){ // Salta espaços
+        ptr_direita++;
+    }
+
+    strncpy(comando2, ptr_direita, MAX_CMD_LEN - 1);
+    comando2[MAX_CMD_LEN - 1] = '\0'; // Terminar a string do comando
 
     return 1; // Indica que há pipe
 }

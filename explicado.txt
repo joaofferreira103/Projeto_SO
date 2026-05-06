@@ -55,6 +55,7 @@
 
   AQUI IMPORTANTE:
 
+  -- Melhorar o parser para pipes ----> FEITO 
   -- Implementar politica de escalonamento 
   -- Implementar suporte a multiplos pipes 
   -- Testes 
