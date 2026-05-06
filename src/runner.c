@@ -243,7 +243,7 @@ void executarComandoSimples(char *cmd, Message *msg){
         }
 
         // Feedback ao utilizador baseado no status do comando
-        if(WIFEXITED(status) && WEFISTATUS(status) == 0){
+        if(WIFESTATUS(status) && WEFISTATUS(status) == 0){
             char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
             write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
         } else {
@@ -252,7 +252,6 @@ void executarComandoSimples(char *cmd, Message *msg){
         }
     }     
 }
-
 
 
 int main(int argc, char *argv[]){

@@ -51,4 +51,13 @@
 
     - caso seja stop, o controller interrompe o ciclo e fecha o descritor de ficheiro e remove o nodo do FIFO. 
 
-    
+  ------------------------ 
+
+  AQUI IMPORTANTE:
+
+  -- Implementar politica de escalonamento 
+  -- Implementar suporte a multiplos pipes 
+  -- Testes 
+  -- Verificar se a makefile segue o exemplo do enunciado
+  -- Verificar se nao usamos nada que o enunciado nao permita 
+  
