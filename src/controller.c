@@ -4,18 +4,20 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "controller.h"
 #include "utils.h"
 #include "protocol.h"
 
-typedef struct node{
+struct node{
     Message msg; // Dados do pedido
     struct timespec p_chegada; // Momento da chegada
     struct timespec p_inicio; // Momento do início da execução
     struct node *next; // Ponteiro para o proximo pedido na fila
-} CommandNode; 
+}; 
 
 // Variáveis globais para a fila de pedidos
 CommandNode *primeiro_fila = NULL; // Aponta para o primeiro pedido 
@@ -42,21 +44,6 @@ void InserirPedido(Message pedido){
     }
 }
 
-CommandNode* RetirarPedido(){
-    if(primeiro_fila == NULL){
-        return NULL;
-    }
-
-    CommandNode *executar = primeiro_fila;
-    // Message pedido_atual = temp->msg; ja nao deverá ser + necessario 
-
-    primeiro_fila = primeiro_fila->next;
-    if(primeiro_fila == NULL){
-        ultimo_fila = NULL;
-    }
-
-    return executar; 
-}
 
 void InserirAtivos (CommandNode *no){
     no->next = tarefas_ativas;
@@ -83,14 +70,78 @@ CommandNode* RetirarAtivos(int pid){
     return curr; // Retorna o nó encontrado antes de o apagar 
 }
 
+int tarefasAtivasUser(int user_id){
+    int count = 0;
+    CommandNode *curr = tarefas_ativas;
+    while(curr != NULL){
+        if(curr->msg.user_id == user_id){
+            count++;
+        }
+        curr = curr->next;
+    }
+    return count; 
+}
 
-void GerirPedidos(int *tasks_running, int max_simultaneo){ 
+// Selecionar pedido 
+CommandNode* selecionarPedido(char *politica){
+    if(!primeiro_fila) return NULL;
+
+    // Politica = FIFO 
+    if(strcasecmp(politica, "FIFO") == 0){
+        CommandNode *escolhido = primeiro_fila;
+        primeiro_fila = primeiro_fila->next;
+
+        if(!primeiro_fila) ultimo_fila = NULL; 
+        return escolhido;
+    }
+
+    // Politica = Round-Robin por utilizador (RR)
+    if(strcasecmp(politica, "RR") == 0){
+        CommandNode *prev = NULL;
+        CommandNode *curr = primeiro_fila;
+        CommandNode *melhor_prev = NULL;
+        CommandNode *melhor_curr = primeiro_fila;
+
+        int min_ativas = 9999; 
+
+        while(curr){
+            int ativas = tarefasAtivasUser(curr->msg.user_id);
+            if(ativas < min_ativas){
+                min_ativas = ativas;
+                melhor_curr = curr;
+                melhor_prev = prev; 
+            }
+
+            // Se econtrarmos alguem com 0 tarefas ativas, escolhemos logo
+            if (ativas == 0) break;
+
+            prev = curr;
+            curr = curr->next;
+        }
+
+        // Remover o melhor_curr da fila
+        if(melhor_prev == NULL){ // era o primeiro da fila
+            primeiro_fila = melhor_curr->next; 
+        } else {
+            melhor_prev->next = melhor_curr->next; 
+        }
+
+        if(melhor_curr == ultimo_fila){ // era o ultimo da fila
+            ultimo_fila = melhor_prev; 
+        }
+
+        return melhor_curr;
+    } 
+    return NULL; 
+}  
+
+void GerirPedidos(int *tasks_running, int max_simultaneo, char *politica){ 
     // TALVEZ METER AQUI O IF(SHUTDOWN) RETURN???
     // Quando há vagas e pedidos na fila
     while(*tasks_running < max_simultaneo && primeiro_fila != NULL){
 
-        // Retira o próximo pedido da fila
-        CommandNode *executar = RetirarPedido();
+        CommandNode *executar = selecionarPedido(politica);
+        if(executar == NULL) break; 
         
         clock_gettime(CLOCK_MONOTONIC, &executar->p_inicio); 
 
@@ -100,21 +151,23 @@ void GerirPedidos(int *tasks_running, int max_simultaneo){
 
         int fd_res = open (runner_fifo, O_WRONLY);
 
-        // Verificar se a abertura do pipe privado foi bem-sucedida
         if (fd_res != -1){
-            int autorizado = 1; // Simula autorização para o pedido
+            int autorizado = STATUS_OK; 
             write(fd_res, &autorizado, sizeof(int)); // Envia a autorização para o runner
             close(fd_res); // Fecha o pipe privado após enviar a resposta
 
-            (*tasks_running)++; // Incrementa o número de tarefas em execução
+            (*tasks_running)++; 
         
             // Adicionar o pedido à lista de tarefas ativas
             InserirAtivos(executar);
             // print aaqui de comando autorizado e a executar??? nao devo meter 
-
+        } else {
+            perror("Erro ao abrir o pipe do runner para autorização");
+            free(executar); 
         }
         // Aqui podemos guardar o tempo de início para o log 
         // Ver se fazemos isso depois 
+        // CONFIRMAR DEPOIS SE JÁ FIZ, NAO ME LEMBRO, TOU SEM PACIENCIA AGORA 
     }
 }
 
@@ -170,6 +223,7 @@ int main (int argc, char *argv[]){
 
     // Maximo de tarefas simultaneas
     int max_simultaneo = atoi(argv[1]);
+    char *politica = argv[2];
     int tasks_running = 0; 
 
     // 1. Criar o FIFO (pipe com nome)
@@ -211,7 +265,7 @@ int main (int argc, char *argv[]){
             InserirPedido(msg);
             // podemos fazer este printf para verificar que o pedido chegou ao controller ??????
             printf("O comando: %s do utilizador %d foi recebido.\n", msg.command, msg.user_id);
-            GerirPedidos(&tasks_running, max_simultaneo); 
+            GerirPedidos(&tasks_running, max_simultaneo, politica); 
             }
         }
 
@@ -240,7 +294,7 @@ int main (int argc, char *argv[]){
             if(shutdown_flag && tasks_running == 0){
                 keep_running = 0; // Sinaliza para sair do loop principal
             } else {
-                GerirPedidos(&tasks_running, max_simultaneo); // Verificar se há mais pedidos para autorizar
+                GerirPedidos(&tasks_running, max_simultaneo, politica); // Verificar se há mais pedidos para autorizar
             }
         }
 

@@ -4,7 +4,10 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "utils.h"
 #include "protocol.h"
+#include "controller.h"
+#include "runner.h"
 
 long calcularTempo(struct timespec inicio, struct timespec fim){
    long ms = (fim.tv_sec - inicio.tv_sec) * 1000; // Converte segundos para milissegundos

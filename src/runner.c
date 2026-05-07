@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include "runner.h"
 #include "protocol.h"
 
 // comando para correr runner - ./runner -e <user_id> <command>
