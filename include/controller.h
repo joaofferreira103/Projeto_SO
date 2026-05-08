@@ -16,7 +16,7 @@ void InserirAtivos (CommandNode *no);
 
 CommandNode* RetirarAtivos(int pid);
 
-void GerirPedidos(int *tasks_running, int max_simultaneo);
+void GerirPedidos(int *tasks_running, int max_simultaneo, char *politica);
 
 void responderStatus(Message msg_pedido);
 

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -34,7 +35,7 @@ void InserirPedido(Message pedido){
     clock_gettime(CLOCK_MONOTONIC, &novo_node->p_chegada);
 
      // Inserir o novo pedido no final da fila
-     if(primeiro_fila == NULL){
+    if(primeiro_fila == NULL){
         primeiro_fila = novo_node;
         ultimo_fila = novo_node;
     }

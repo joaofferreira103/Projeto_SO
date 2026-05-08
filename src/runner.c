@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <strings.h>
 
 #include "runner.h"
 #include "protocol.h"
@@ -104,7 +105,7 @@ void consultarStatus(char *myfifo){
 
         // Formatar e imprimir a resposta
         char buffer[256];
-        int len = snprintf(buffer, sizeof(buffer),"user-id %d - command-id %d",
+        int len = snprintf(buffer, sizeof(buffer),"user-id %d - command-id %d\n",
                   resposta.user_id, resposta.runner_pid);
         write(STDOUT_FILENO, buffer, len);
     }
@@ -251,7 +252,7 @@ void executarComandoSimples(char *cmd, Message *msg){
         }
 
         // Feedback ao utilizador baseado no status do comando
-        if(WIFESTATUS(status) && WEFISTATUS(status) == 0){
+        if(WIFEXITED(status) && WEXITSTATUS(status) == 0){
             char finish_msg[] = "[runner] Comando concluído com sucesso.\n";
             write(STDOUT_FILENO, finish_msg, sizeof(finish_msg));
         } else {
@@ -273,7 +274,7 @@ int main(int argc, char *argv[]){
     // 2. Criar o pipe privado que recebe a resposta
     char my_fifo[64];
     // Nome do pipe priv. do runner é baseado no PID do processo
-    sprintf(my_fifo, "tmp/fifo_%d", getpid());
+    snprintf(my_fifo, sizeof(my_fifo), "tmp/fifo_%d", getpid());
     mkfifo(my_fifo, 0666); // Criar o FIFO privado
 
     // Verificar se é o "-e" para executar um comando
@@ -298,10 +299,10 @@ int main(int argc, char *argv[]){
         // estou a escrever o content num array char com o sprintf 
         // e depois uso o write para escrever esse array no STDOUT verificar com stor se posso
         char submit_msg[128];
-        sprintf(submit_msg, "[runner] command %d submetido\n", getpid());
+        snprintf(submit_msg, sizeof(submit_msg), "[runner] command %d submetido\n", getpid());
         write(STDOUT_FILENO, submit_msg, strlen(submit_msg));
     
-        // 6. Abre o pipe para ler a resposta do controller 
+        // 6. Abre o fifo para ler a resposta do controller 
         int fd_priv = open(my_fifo, O_RDONLY); 
         int status_resposta;
         read(fd_priv, &status_resposta, sizeof(int)); // Lê a resposta do controller
@@ -355,7 +356,8 @@ int main(int argc, char *argv[]){
         char shutdown_msg[] = "[runner] Pedido de shutdown submetido.\n";
         write(STDOUT_FILENO, shutdown_msg, sizeof(shutdown_msg)-1);
     } else {
-        perror("[runner]: Erro ao abrir o FIFO do controller para shutdown");
+        fprintf(stderr, "[runner]: Argumentos inválidos. Use: -e <user_id> <command> | -c | -s\n");
+        return 1;
     }
     
 unlink(my_fifo); // Remove o FIFO privado do sistema
