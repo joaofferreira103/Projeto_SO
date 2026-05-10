@@ -56,13 +56,14 @@
   AQUI IMPORTANTE:
 
   -- Melhorar o parser para pipes ----> FEITO 
-  -- Implementar politica de escalonamento 
-  -- Implementar suporte a multiplos pipes (Ver se é suposto)
+  -- Implementar politica de escalonamento ----> FEITO
+  -- Implementar suporte a multiplos pipes (Ver se é suposto) 
   -- Testes 
   -- Tirar da main cenas que devem ser proprias funções fora 
   -- Verificar se a makefile segue o exemplo do enunciado
   -- Verificar se nao usamos nada que o enunciado nao permita 
   -- Na gerirPedidos do controller verificas a situação do shutdown
+
 
 ----> Quanto ao escalonamento: 
   - Quando o utilizador usa -c, os comandos em espera devem estar organizados pela sua ordem de escalonamento.

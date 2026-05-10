@@ -25,7 +25,7 @@ typedef struct{
 
 typedef struct{
     RequestType type; 
-    pid_t runner_pid; // Usado para criar o nome do pipe de repsosta
+    pid_t runner_pid; // Usado para criar o nome do fifo de repsosta
     int user_id; 
     char command[MAX_CMD_LEN];
 } Message; 
