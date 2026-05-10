@@ -2,11 +2,6 @@
 # =============================================================================
 # run_tests.sh — Script principal de testes do projeto SO
 # Uso: ./tests/run_tests.sh [teste]
-#   sem argumento : corre todos os testes
-#   basic         : testes básicos de funcionamento
-#   fifo_vs_rr    : comparação de políticas de escalonamento
-#   parallelism   : testes de paralelismo com diferentes -n
-#   stress        : teste de carga com múltiplos utilizadores
 # =============================================================================
 
 PROJ_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,28 +20,39 @@ fail()  { echo -e "${RED}[FAIL]${NC} $1"; }
 # Utilitários
 # ---------------------------------------------------------------------------
 
+RUNNER_PIDS=()
+
 start_controller() {
     local parallel=$1 policy=$2
-    "$BIN/controller" "$parallel" "$policy" &
+    rm -f "$PROJ_DIR/tmp/main_fifo" "$PROJ_DIR/tmp/fifo_"*
+    RUNNER_PIDS=()
+    "$BIN/controller" "$parallel" "$policy" > /dev/null 2>&1 &
     CTRL_PID=$!
-    sleep 0.3   # dar tempo ao controller para criar o FIFO
+    sleep 0.8
     info "Controller iniciado (PID=$CTRL_PID, parallel=$parallel, policy=$policy)"
 }
 
 stop_controller() {
+    # Esperar todos os runners terminarem
+    for pid in "${RUNNER_PIDS[@]}"; do
+        wait "$pid" 2>/dev/null
+    done
+    sleep 0.5  # dar tempo ao controller para processar os REQ_FINISHED
     "$BIN/runner" -s > /dev/null 2>&1
-    wait $CTRL_PID 2>/dev/null
+    for i in $(seq 1 10); do
+        sleep 0.5
+        kill -0 $CTRL_PID 2>/dev/null || break
+    done
+    kill $CTRL_PID 2>/dev/null
     rm -f "$PROJ_DIR/tmp/main_fifo" "$PROJ_DIR/tmp/fifo_"*
     info "Controller parado."
 }
 
 run_cmd() {
-    # run_cmd <user_id> <command>  — executa em background, devolve PID
-    "$BIN/runner" -e "$1" "$2" &
-    echo $!
+    # run_cmd <user_id> <command> — lança em background e regista o PID
+    "$BIN/runner" -e "$1" "$2" > /dev/null 2>&1 &
+    RUNNER_PIDS+=($!)
 }
-
-wait_all() { wait; }
 
 # ---------------------------------------------------------------------------
 # TESTE 1 — Funcionamento básico
@@ -55,7 +61,6 @@ test_basic() {
     info "=== TESTE BÁSICO ==="
     start_controller 1 FIFO
 
-    # Submeter um comando simples e verificar output
     output=$("$BIN/runner" -e 1 "echo hello_world" 2>&1)
     if echo "$output" | grep -q "hello_world"; then
         ok "echo hello_world executado com sucesso"
@@ -63,22 +68,20 @@ test_basic() {
         fail "echo hello_world falhou. Output: $output"
     fi
 
-    # Redirecionamento >
     TMP_OUT="$PROJ_DIR/tmp/test_redir.txt"
-    "$BIN/runner" -e 1 "echo redir_test > $TMP_OUT" 2>&1 | grep -q "sucesso" && \
-        ok "Redirecionamento > aceite pelo runner"
+    "$BIN/runner" -e 1 "echo redir_test > $TMP_OUT" > /dev/null 2>&1
+    sleep 0.3
     if grep -q "redir_test" "$TMP_OUT" 2>/dev/null; then
-        ok "Conteúdo redirecionado correctamente para ficheiro"
+        ok "Redirecionamento > funcionou"
     else
-        warn "Ficheiro de redirecionamento vazio ou ausente"
+        warn "Redirecionamento > sem conteúdo"
     fi
 
-    # Consulta de status
     status=$("$BIN/runner" -c 2>&1)
     if echo "$status" | grep -qiE "Executing|Scheduled"; then
-        ok "Consulta -c retorna output com cabeçalhos"
+        ok "Consulta -c retorna output correcto"
     else
-        fail "Consulta -c não retornou formato esperado. Output: $status"
+        fail "Consulta -c falhou. Output: $status"
     fi
 
     stop_controller
@@ -86,7 +89,37 @@ test_basic() {
 }
 
 # ---------------------------------------------------------------------------
-# TESTE 2 — Comparação FIFO vs Round-Robin
+# TESTE 2 — Pipes e redirecionamentos
+# ---------------------------------------------------------------------------
+test_redirects() {
+    info "=== TESTE PIPES E REDIRECIONAMENTOS ==="
+    start_controller 2 FIFO
+
+    OUT="$PROJ_DIR/tmp/pipe_test.txt"
+    "$BIN/runner" -e 1 "grep root /etc/passwd | wc -l > $OUT" > /dev/null 2>&1
+    sleep 0.5
+    if [ -s "$OUT" ]; then
+        ok "Pipe + redirecionamento: $(cat "$OUT" | tr -d ' ')"
+    else
+        warn "Pipe sem output"
+    fi
+
+    echo "linha de teste" > "$PROJ_DIR/tmp/input.txt"
+    OUT2="$PROJ_DIR/tmp/input_redir_out.txt"
+    "$BIN/runner" -e 2 "wc -l < $PROJ_DIR/tmp/input.txt > $OUT2" > /dev/null 2>&1
+    sleep 0.5
+    if [ -s "$OUT2" ]; then
+        ok "Redirecionamento input (<): $(cat "$OUT2" | tr -d ' ')"
+    else
+        warn "Redirecionamento input (<) sem output"
+    fi
+
+    stop_controller
+    ok "=== PIPES E REDIRECIONAMENTOS CONCLUÍDOS ==="; echo
+}
+
+# ---------------------------------------------------------------------------
+# TESTE 3 — Comparação FIFO vs Round-Robin
 # ---------------------------------------------------------------------------
 test_fifo_vs_rr() {
     info "=== TESTE FIFO vs RR ==="
@@ -95,33 +128,28 @@ test_fifo_vs_rr() {
 
     for POLICY in FIFO RR; do
         info "A testar política: $POLICY"
-
-        # Limpar log antes de cada teste
         > "$PROJ_DIR/logs/log.txt"
 
-        # Parallelism=1 para forçar fila e ver diferença de políticas
         start_controller 1 "$POLICY"
 
-        # Utilizador 1 submete 3 comandos (comandos mais longos)
-        run_cmd 1 "sleep 1" > /dev/null
-        run_cmd 1 "sleep 1" > /dev/null
-        run_cmd 1 "sleep 1" > /dev/null
+        # User 1 submete 3 comandos
+        run_cmd 1 "sleep 1"
+        run_cmd 1 "sleep 1"
+        run_cmd 1 "sleep 1"
+        # User 2 submete 1 comando depois
+        sleep 0.5
+        run_cmd 2 "sleep 1"
 
-        # Utilizador 2 submete 1 comando (deveria ser favorecido pelo RR)
-        sleep 0.1   # garantir que user1 chegou primeiro
-        run_cmd 2 "sleep 1" > /dev/null
-
-        wait_all
         stop_controller
 
-        # Extrair dados do log e adicionar ao CSV
+        # Extrair dados do log
         while IFS='|' read -r uid cid cmd espera exec total; do
-            u=$(echo "$uid" | grep -oP '\d+')
-            c=$(echo "$cid" | grep -oP '\d+')
-            w=$(echo "$espera" | grep -oP '\d+')
-            e=$(echo "$exec" | grep -oP '\d+')
-            t=$(echo "$total" | grep -oP '\d+')
-            echo "$POLICY,$u,$c,$w,$e,$t" >> "$CSV"
+            u=$(echo "$uid" | grep -oE '[0-9]+')
+            c=$(echo "$cid" | grep -oE '[0-9]+')
+            w=$(echo "$espera" | grep -oE '[0-9]+')
+            e=$(echo "$exec" | grep -oE '[0-9]+')
+            t=$(echo "$total" | grep -oE '[0-9]+')
+            [ -n "$u" ] && echo "$POLICY,$u,$c,$w,$e,$t" >> "$CSV"
         done < "$PROJ_DIR/logs/log.txt"
 
         sleep 0.5
@@ -130,13 +158,13 @@ test_fifo_vs_rr() {
     ok "Resultados guardados em $CSV"
     info "Resumo (wait médio por política e utilizador):"
     awk -F',' 'NR>1 {sum[$1","$2]+=$4; cnt[$1","$2]++}
-               END {for(k in sum) printf "  %-10s user %s -> wait médio: %.0f ms\n", \
+               END {for(k in sum) printf "  %-6s user %s -> wait medio: %.0f ms\n", \
                    split(k,a,",")?a[1]:"?", a[2], sum[k]/cnt[k]}' "$CSV" | sort
     ok "=== FIFO vs RR CONCLUÍDO ==="; echo
 }
 
 # ---------------------------------------------------------------------------
-# TESTE 3 — Impacto do paralelismo (parallel = 1, 2, 4)
+# TESTE 4 — Impacto do paralelismo
 # ---------------------------------------------------------------------------
 test_parallelism() {
     info "=== TESTE DE PARALELISMO ==="
@@ -148,32 +176,28 @@ test_parallelism() {
         > "$PROJ_DIR/logs/log.txt"
 
         start_controller "$PAR" FIFO
+        T_START=$(python3 -c "import time; print(int(time.time()*1000))")
 
-        T_START=$(date +%s%3N)
-
-        # 8 comandos de 1 segundo cada
         for i in $(seq 1 8); do
-            run_cmd $((i % 4 + 1)) "sleep 1" > /dev/null
+            run_cmd $((i % 4 + 1)) "sleep 1"
         done
-        wait_all
-
-        T_END=$(date +%s%3N)
-        WALL=$((T_END - T_START))
 
         stop_controller
+        T_END=$(python3 -c "import time; print(int(time.time()*1000))")
+        WALL=$((T_END - T_START))
 
         echo "$PAR,$WALL" >> "$CSV"
-        ok "parallel=$PAR -> tempo total (wall): ${WALL}ms"
+        ok "parallel=$PAR -> tempo total: ${WALL}ms"
         sleep 0.5
     done
 
-    info "Resultados guardados em $CSV"
+    info "Resultados em $CSV"
     info "Esperado: parallel=1 ~8s, parallel=2 ~4s, parallel=4 ~2s"
     ok "=== PARALELISMO CONCLUÍDO ==="; echo
 }
 
 # ---------------------------------------------------------------------------
-# TESTE 4 — Stress: múltiplos utilizadores simultâneos
+# TESTE 5 — Stress multi-utilizador
 # ---------------------------------------------------------------------------
 test_stress() {
     info "=== TESTE DE STRESS ==="
@@ -183,84 +207,48 @@ test_stress() {
 
     start_controller 3 RR
 
-    # 4 utilizadores, cada um com 3 comandos (mix de durações)
-    CMDS=("sleep 0.5" "sleep 1" "sleep 0.2" "echo stress_ok")
     for USER in 1 2 3 4; do
-        for CMD in "${CMDS[@]}"; do
-            run_cmd "$USER" "$CMD" > /dev/null
-        done
+        run_cmd "$USER" "sleep 0.5"
+        run_cmd "$USER" "sleep 1"
+        run_cmd "$USER" "sleep 0.2"
+        run_cmd "$USER" "echo stress_ok"
     done
 
-    wait_all
     stop_controller
 
-    # Processar log
     while IFS='|' read -r uid cid cmd espera exec total; do
-        u=$(echo "$uid" | grep -oP '\d+')
-        c=$(echo "$cid" | grep -oP '\d+')
-        w=$(echo "$espera" | grep -oP '\d+')
-        e=$(echo "$exec" | grep -oP '\d+')
-        t=$(echo "$total" | grep -oP '\d+')
-        echo "$u,$c,$w,$e,$t" >> "$CSV"
+        u=$(echo "$uid" | grep -oE '[0-9]+')
+        c=$(echo "$cid" | grep -oE '[0-9]+')
+        w=$(echo "$espera" | grep -oE '[0-9]+')
+        e=$(echo "$exec" | grep -oE '[0-9]+')
+        t=$(echo "$total" | grep -oE '[0-9]+')
+        [ -n "$u" ] && echo "$u,$c,$w,$e,$t" >> "$CSV"
     done < "$PROJ_DIR/logs/log.txt"
 
-    info "Resultados guardados em $CSV"
     info "Waits por utilizador (RR, parallel=3):"
     awk -F',' 'NR>1 {sum[$1]+=$3; cnt[$1]++}
-               END {for(u in sum) printf "  user %s -> wait médio: %.0f ms (%d cmds)\n", \
+               END {for(u in sum) printf "  user %s -> wait medio: %.0f ms (%d cmds)\n", \
                    u, sum[u]/cnt[u], cnt[u]}' "$CSV" | sort
     ok "=== STRESS CONCLUÍDO ==="; echo
 }
 
 # ---------------------------------------------------------------------------
-# TESTE 5 — Pipe e redirecionamentos
-# ---------------------------------------------------------------------------
-test_redirects() {
-    info "=== TESTE PIPES E REDIRECIONAMENTOS ==="
-    start_controller 2 FIFO
-
-    OUT="$PROJ_DIR/tmp/pipe_test.txt"
-
-    # Pipe: grep | wc
-    "$BIN/runner" -e 1 "grep root /etc/passwd | wc -l > $OUT" 2>&1 | grep -q "sucesso" && \
-        ok "Pipe + redirecionamento aceite"
-    if [ -s "$OUT" ]; then
-        ok "Ficheiro de saída criado com conteúdo: $(cat "$OUT")"
-    else
-        warn "Ficheiro de saída vazio ou ausente"
-    fi
-
-    # Redirecionamento de input
-    echo "linha de teste" > "$PROJ_DIR/tmp/input.txt"
-    OUT2="$PROJ_DIR/tmp/input_redir_out.txt"
-    "$BIN/runner" -e 2 "wc -l < $PROJ_DIR/tmp/input.txt > $OUT2" 2>&1
-    if [ -s "$OUT2" ]; then
-        ok "Redirecionamento de input (<) funcionou: $(cat "$OUT2")"
-    else
-        warn "Redirecionamento de input (<) sem output"
-    fi
-
-    stop_controller
-    ok "=== PIPES E REDIRECIONAMENTOS CONCLUÍDOS ==="; echo
-}
-
-# ---------------------------------------------------------------------------
-# Dispatcher principal
+# Main
 # ---------------------------------------------------------------------------
 cd "$PROJ_DIR"
 
 if [ ! -f "$BIN/controller" ] || [ ! -f "$BIN/runner" ]; then
     warn "Binários não encontrados. A compilar..."
-    make -C "$PROJ_DIR" all || { fail "Compilação falhou. Abortar."; exit 1; }
+    make -C "$PROJ_DIR" all || { fail "Compilação falhou."; exit 1; }
 fi
 
 CHOICE="${1:-all}"
 case "$CHOICE" in
     basic)        test_basic ;;
+    redirects)    test_redirects ;;
     fifo_vs_rr)   test_fifo_vs_rr ;;
     parallelism)  test_parallelism ;;
     stress)       test_stress ;;
-    redirects)    test_redirects ;;
     all)
         test_basic
         test_redirects
@@ -269,9 +257,9 @@ case "$CHOICE" in
         test_stress
         ;;
     *)
-        echo "Uso: $0 [basic|fifo_vs_rr|parallelism|stress|redirects|all]"
+        echo "Uso: $0 [basic|redirects|fifo_vs_rr|parallelism|stress|all]"
         exit 1
         ;;
 esac
 
-info "Todos os resultados CSV estão em: $RESULTS_DIR/"
+info "Resultados CSV em: $RESULTS_DIR/"
