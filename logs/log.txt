@@ -1,9 +1,4 @@
-User ID: 101 | Command_ID: 10775 | Command: ls -la | Tempo de espera: 0ms | Tempo de execução: 3ms | Tempo Total: 3ms
-User ID: 103 | Command_ID: 11667 | Command: ls -la | Tempo de espera: 0ms | Tempo de execução: 3ms | Tempo Total: 3ms
-User ID: 103 | Command_ID: 11696 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
-User ID: 103 | Command_ID: 11788 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
-User ID: 103 | Command_ID: 11790 | Command: ls -la | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
-User ID: 101 | Command_ID: 55600 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 3ms | Tempo Total: 3ms
-User ID: 154 | Command_ID: 7332 | Command: ls | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
-User ID: 154 | Command_ID: 7335 | Command: ls -a | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
-User ID: 14 | Command_ID: 7337 | Command: ls -a | Tempo de espera: 0ms | Tempo de execução: 2ms | Tempo Total: 2ms
+User ID: 1 | Command_ID: 11736 | Command: sleep 1 | Tempo de espera: 0ms | Tempo de execução: 1010ms | Tempo Total: 1010ms
+User ID: 1 | Command_ID: 11735 | Command: sleep 1 | Tempo de espera: 1011ms | Tempo de execução: 1014ms | Tempo Total: 2025ms
+User ID: 1 | Command_ID: 11737 | Command: sleep 1 | Tempo de espera: 2025ms | Tempo de execução: 1013ms | Tempo Total: 3038ms
+User ID: 2 | Command_ID: 11740 | Command: sleep 1 | Tempo de espera: 2926ms | Tempo de execução: 1013ms | Tempo Total: 3939ms

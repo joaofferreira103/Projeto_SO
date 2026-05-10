@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -294,6 +294,8 @@ int main (int argc, char *argv[]){
 
             if(shutdown_flag && tasks_running == 0){
                 keep_running = 0; // Sinaliza para sair do loop principal
+                // close(fd_dummy);
+                break;
             } else {
                 GerirPedidos(&tasks_running, max_simultaneo, politica); // Verificar se há mais pedidos para autorizar
             }
@@ -309,7 +311,9 @@ int main (int argc, char *argv[]){
 
             // Não havendo ninguem a correr, fecha
             if(tasks_running == 0){
-                keep_running = 0; // Sinaliza para sair do loop principal
+                keep_running = 0;  // Sinaliza para sair do loop principal
+                // close(fd_dummy);
+                break;
                 // VER COMO FAZER O CICLO PARAR APOS OS REQUESTS TERMINAREM E O SHUTDOWN_FLAG ESTAR ATIVO
             }
         } 
